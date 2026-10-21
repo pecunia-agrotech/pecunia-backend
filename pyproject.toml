@@ -1,0 +1,18 @@
+[project]
+name = "pecunia-agrotech-backend"
+version = "1.0.0"
+requires-python = ">=3.12"
+dynamic = ["dependencies"]
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E701", "E702"]
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
