@@ -1,17 +1,20 @@
 [project]
 name = "pecunia-agrotech-backend"
-version = "1.0.0"
+version = "2.0.0"
 requires-python = ">=3.12"
-dynamic = ["dependencies"]
+dependencies = ["fastapi>=0.156,<1", "uvicorn>=0.54,<1", "pydantic>=2.14,<3"]
+[dependency-groups]
+dev = ["pytest>=8,<9", "httpx>=0.28,<1", "ruff>=0.17,<1", "mypy>=1.20,<2", "uv>=0.13,<1"]
+[tool.uv]
+package = false
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 [tool.ruff]
-line-length = 130
+line-length = 120
 target-version = "py312"
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
-ignore = ["E701", "E702"]
+select = ["E4", "E7", "E9", "F", "I"]
 [tool.mypy]
 python_version = "3.12"
 strict = true

@@ -1,3 +1,13 @@
+# DataBase local and snapshots
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*before-migration*
+
+# Outputs temporary files and context reports
+repomix-output.*
+*.egg-info/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -5,6 +15,10 @@ __pycache__/
 
 # C extensions
 *.so
+
+#Node 
+node_modules
+
 
 # Distribution / packaging
 .Python
