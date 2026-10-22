@@ -1,74 +1,95 @@
-"""Fatos puros e indicadores: apenas biblioteca padrão, sem HTTP ou I/O."""
-from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+"""Pure working memory and authoritative financial indicator calculations."""
 
-ZERO = Decimal('0')
-CENT = Decimal('0.01')
+from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
+
+from .exceptions import InvalidMetricsException
+
+ZERO = Decimal("0")
 
 
 def money(value: Decimal) -> Decimal:
-    return value.quantize(CENT, rounding=ROUND_HALF_UP)
+    return value.quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
 
 
 @dataclass(frozen=True, slots=True)
 class WorkingMemory:
-    vacas_lactacao: int
-    producao_diaria: Decimal
-    receita_leite: Decimal
-    outras_receitas: Decimal
-    custo_alimentar: Decimal
-    outras_despesas: Decimal
-    fixos_diarios: Decimal
-    preco_insumo_kg: Decimal | None = None
-    volume_completo: bool = True
-    tem_lancamentos: bool = True
-    tem_custo_alimentar: bool = True
-    fixos_configurados: bool = True
+    milking_cows: int | None
+    milk_liters: Decimal
+    milk_revenue: Decimal
+    other_revenue: Decimal
+    feed_cost: Decimal
+    other_expenses: Decimal
+    allocated_fixed_cost: Decimal
+    reference_feed_price: Decimal | None = None
+    complete_milk_volume: bool = True
+    has_records: bool = True
+    has_feed_cost: bool = True
+    settings_configured: bool = True
 
     def __post_init__(self) -> None:
-        if self.vacas_lactacao < 1:
-            raise ValueError('Informe ao menos uma vaca em lactação.')
-        for name in ('producao_diaria', 'receita_leite', 'outras_receitas',
-                     'custo_alimentar', 'outras_despesas', 'fixos_diarios'):
-            value = getattr(self, name)
-            if not value.is_finite() or value < ZERO:
-                raise ValueError(f'Fato inválido: {name}')
-        if self.preco_insumo_kg is not None and (
-            not self.preco_insumo_kg.is_finite() or self.preco_insumo_kg <= ZERO
+        if self.milking_cows is not None and self.milking_cows < 1:
+            raise InvalidMetricsException("Informe ao menos uma vaca em lactação.")
+        for value in (
+            self.milk_liters,
+            self.milk_revenue,
+            self.other_revenue,
+            self.feed_cost,
+            self.other_expenses,
+            self.allocated_fixed_cost,
         ):
-            raise ValueError('Preço do insumo deve ser positivo.')
+            if not value.is_finite() or value < ZERO:
+                raise InvalidMetricsException("Os fatos financeiros devem ser finitos e não negativos.")
+        for value in (
+            self.milk_revenue,
+            self.other_revenue,
+            self.feed_cost,
+            self.other_expenses,
+            self.allocated_fixed_cost,
+        ):
+            if value != money(value):
+                raise InvalidMetricsException("Os fatos monetários devem usar centavos inteiros.")
+        if self.reference_feed_price is not None and (
+            not self.reference_feed_price.is_finite() or self.reference_feed_price <= ZERO
+        ):
+            raise InvalidMetricsException("O preço do insumo deve ser positivo.")
 
 
 @dataclass(frozen=True, slots=True)
 class Indicators:
-    receita_total: Decimal
-    custo_total: Decimal
-    iofc: Decimal
-    iofc_vaca: Decimal
-    lucro: Decimal
-    preco_leite: Decimal | None
-    ponto_equilibrio_litros: Decimal | None
-    custo_litro: Decimal | None
-    percentual_alimentar: Decimal | None
-    relacao_troca: Decimal | None
-    litros_vaca: Decimal | None
+    total_revenue: Decimal
+    total_cost: Decimal
+    iofc: Decimal | None
+    iofc_per_cow: Decimal | None
+    net_result: Decimal
+    milk_price: Decimal | None
+    break_even_liters: Decimal | None
+    cost_per_liter: Decimal | None
+    feed_cost_per_liter: Decimal | None
+    feed_cost_share: Decimal | None
+    exchange_ratio: Decimal | None
+    liters_per_cow: Decimal | None
 
 
 def calculate(facts: WorkingMemory) -> Indicators:
-    cost = facts.custo_alimentar + facts.outras_despesas + facts.fixos_diarios
-    iofc = facts.receita_leite - facts.custo_alimentar
-    valid_milk = facts.volume_completo and facts.producao_diaria > ZERO and facts.receita_leite > ZERO
-    price = facts.receita_leite / facts.producao_diaria if valid_milk else None
-    # Equilíbrio estático: mantém os custos observados, não projeta custo marginal.
-    required_milk_income = max(ZERO, cost - facts.outras_receitas)
+    cost = facts.feed_cost + facts.other_expenses + facts.allocated_fixed_cost
+    valid_milk = facts.complete_milk_volume and facts.milk_liters > ZERO and facts.milk_revenue > ZERO
+    price = facts.milk_revenue / facts.milk_liters if valid_milk else None
+    iofc = facts.milk_revenue - facts.feed_cost if facts.has_feed_cost and facts.milk_revenue > ZERO else None
+    required_income = max(ZERO, cost - facts.other_revenue)
     return Indicators(
-        receita_total=facts.receita_leite + facts.outras_receitas,
-        custo_total=cost, iofc=iofc, iofc_vaca=iofc / facts.vacas_lactacao,
-        lucro=facts.receita_leite + facts.outras_receitas - cost,
-        preco_leite=price,
-        ponto_equilibrio_litros=required_milk_income / price if price is not None else None,
-        custo_litro=cost / facts.producao_diaria if valid_milk else None,
-        percentual_alimentar=facts.custo_alimentar / facts.receita_leite * 100 if facts.receita_leite > ZERO else None,
-        relacao_troca=price / facts.preco_insumo_kg if price is not None and facts.preco_insumo_kg else None,
-        litros_vaca=facts.producao_diaria / facts.vacas_lactacao if valid_milk else None,
+        total_revenue=facts.milk_revenue + facts.other_revenue,
+        total_cost=cost,
+        iofc=iofc,
+        iofc_per_cow=iofc / facts.milking_cows if iofc is not None and facts.milking_cows else None,
+        net_result=facts.milk_revenue + facts.other_revenue - cost,
+        milk_price=price,
+        break_even_liters=required_income / price if price is not None else None,
+        cost_per_liter=cost / facts.milk_liters if valid_milk else None,
+        feed_cost_per_liter=facts.feed_cost / facts.milk_liters if valid_milk and facts.has_feed_cost else None,
+        feed_cost_share=facts.feed_cost / facts.milk_revenue * 100
+        if facts.milk_revenue > ZERO and facts.has_feed_cost
+        else None,
+        exchange_ratio=price / facts.reference_feed_price if price is not None and facts.reference_feed_price else None,
+        liters_per_cow=facts.milk_liters / facts.milking_cows if valid_milk and facts.milking_cows else None,
     )
